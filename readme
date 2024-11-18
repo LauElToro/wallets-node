@@ -1,0 +1,299 @@
+# Documentación del Proyecto: Sistema de Wallets Automáticas
+
+## Índice
+
+1. [Introducción](#introducción)
+2. [Estructura del Proyecto](#estructura-del-proyecto)
+3. [Configuración del Entorno](#configuración-del-entorno)
+4. [Base de Datos](#base-de-datos)
+5. [Endpoints de la API](#endpoints-de-la-api)
+6. [Servicios](#servicios)
+7. [Utilidades](#utilidades)
+8. [Middlewares](#middlewares)
+9. [Pruebas con Postman](#pruebas-con-postman)
+
+## Introducción
+
+Este proyecto es un sistema de wallets automáticas similar a los exchanges de criptomonedas, donde cada usuario tiene una wallet única que permite realizar transacciones y retiros. La aplicación está desarrollada utilizando Node.js y Express para el backend, junto con Sequelize como ORM para la base de datos MySQL. La integración con la blockchain se realiza usando `ethers.js` y `Infura` como proveedor de nodos.
+
+## Estructura del Proyecto
+
+La estructura del proyecto es la siguiente:
+
+├── src/ │
+├── config/ │
+│   ├── db.js                 # Configuración de la conexión a la base de datos
+│   └── infura.js             # Configuración del proveedor Infura
+│   │ │   ├── controllers/
+│   │       ├── userController.js     # Controlador para manejo de usuarios
+│   │       ├── walletController.js   # Controlador para la gestión de wallets
+│   │       ├── transactionController.js  # Controlador para la gestión de transacciones
+│   │       └── withdrawalController.js   # Controlador para los retiros
+│   │ │   ├── models/
+│   │       ├── User.js               # Modelo para los usuarios
+│   │       ├── Wallet.js             # Modelo para las wallets de usuarios
+│   │       └── Transaction.js        # Modelo para las transacciones
+│   │ │   ├── routes/
+│   │       ├── userRoutes.js         # Rutas relacionadas a usuarios (registro, login, etc.)
+│   │       ├── walletRoutes.js       # Rutas relacionadas a wallets (ver saldo, recibir fondos)
+│   │       └── transactionRoutes.js  # Rutas relacionadas a transacciones y retiros
+│   │ │   ├── services/
+│   │       ├── blockchainService.js  # Servicios para interactuar con la blockchain (Infura, ethers.js)
+│   │       ├── walletService.js      # Servicios relacionados a la generación y gestión de wallets
+│   │       └── notificationService.js # Servicios para notificaciones (WebSocket, Socket.io)
+│   │ │   ├── utils/
+│   │   ├── encryption.js         # Funciones para cifrado/descifrado de claves privadas
+│   │   ├── helpers.js            # Funciones auxiliares y reutilizables
+│   │   └── validation.js         # Validaciones comunes
+│   │ │   ├── middlewares/
+│   │   ├── authMiddleware.js     # Middleware para autenticar y autorizar usuarios
+│   │   ├── errorHandler.js       # Middleware para el manejo de errores
+│   │ │   ├── app.js                    # Configuración principal de la aplicación (Express setup)
+│   └── server.js                 # Punto de entrada para iniciar el servidor
+│ ├── tests/
+│   ├── user.test.js              # Pruebas para las funcionalidades relacionadas con los usuarios
+│   ├── wallet.test.js            # Pruebas para la gestión de wallets
+│   └── transaction.test.js       # Pruebas para las transacciones y retiros
+│ ├── .env                          # Variables de entorno (clave de Infura, claves privadas, configuración DB)
+├── .gitignore                    # Archivos y carpetas que Git debería ignorar
+├── package.json                  # Dependencias del proyecto y scripts de npm
+└── README.md                     # Documentación del proyecto
+
+## Configuración del Entorno
+
+El archivo `.env` contiene las variables necesarias para configurar la aplicación. Debes crear este archivo en la raíz del proyecto y agregar la siguiente configuración:
+
+```env
+# Configuración de la base de datos MySQL
+DB_HOST=localhost
+DB_NAME=nombre_de_la_base_de_datos
+DB_USER=usuario
+DB_PASSWORD=contraseña
+DB_PORT=3306
+
+# Clave secreta para JWT
+JWT_SECRET=tu_jwt_secreto_aqui
+
+# Clave de cifrado para las claves privadas
+ENCRYPTION_SECRET=tu_clave_de_cifrado_aqui
+
+# Configuración de Infura
+INFURA_API_KEY=tu_clave_de_infura_aqui
+
+# Puerto del servidor
+PORT=5000
+```
+
+## Base de Datos
+
+La base de datos consta de las siguientes tablas:
+
+1. **`users`**: Almacena la información de los usuarios.
+
+   - Campos: `id`, `username`, `email`, `password`, `created_at`, `updated_at`.
+
+2. **`wallets`**: Almacena la información de las wallets de cada usuario.
+
+   - Campos: `id`, `user_id`, `address`, `private_key`, `balance`, `created_at`, `updated_at`.
+   - Relación: `user_id` es una clave foránea que referencia a la tabla `users`.
+
+3. **`transactions`**: Almacena las transacciones realizadas por los usuarios.
+
+   - Campos: `id`, `user_id`, `from_address`, `to_address`, `amount`, `token_address`, `status`, `hash`, `created_at`, `updated_at`.
+   - Relación: `user_id` es una clave foránea que referencia a la tabla `users`.
+
+## Endpoints de la API
+
+A continuación se describen los endpoints disponibles y su funcionalidad.
+
+### Usuarios (`/api/users`)
+
+- **POST `/register`**: Registrar un nuevo usuario.
+- **POST `/login`**: Iniciar sesión de un usuario.
+- **GET `/profile`**: Obtener el perfil del usuario autenticado.
+
+### Wallets (`/api/wallets`)
+
+- **POST `/create`**: Crear una nueva wallet para el usuario autenticado.
+- **GET `/:userId`**: Obtener la wallet del usuario.
+- **GET `/balance/:userId`**: Obtener el saldo de la wallet de un usuario.
+
+### Transacciones (`/api/transactions`)
+
+- **POST `/create`**: Crear una nueva transacción.
+- **GET `/user/:userId`**: Obtener las transacciones de un usuario.
+- **GET `/status/:hash`**: Obtener el estado de una transacción específica.
+
+## Servicios
+
+Los servicios proporcionan la lógica del negocio y la conexión con la blockchain:
+
+1. **Blockchain Service (`blockchainService.js`)**
+
+   - `getBalance(address)`: Obtiene el saldo de una dirección en la blockchain.
+   - `sendTransaction(privateKey, toAddress, amount)`: Envía una transacción desde una wallet.
+   - `getTransactionStatus(hash)`: Verifica el estado de una transacción.
+
+2. **Wallet Service (`walletService.js`)**
+
+   - `createWallet(userId)`: Crea una nueva wallet para un usuario.
+   - `getWalletByUserId(userId)`: Obtiene la wallet de un usuario específico.
+   - `getWalletBalance(walletAddress)`: Obtiene el saldo de una wallet.
+
+3. **Notification Service (`notificationService.js`)**
+
+   - `initNotificationService(server)`: Inicializa el servicio de notificaciones.
+   - `sendNotification(userId, message)`: Envía una notificación a un usuario específico.
+   - `broadcastNotification(message)`: Envía una notificación a todos los clientes.
+
+## Utilidades
+
+Funciones utilitarias para la aplicación:
+
+1. **Encryption Utilities (`encryption.js`)**
+
+   - `encrypt(text)`: Cifra un texto usando AES.
+   - `decrypt(cipherText)`: Descifra un texto cifrado.
+
+2. **Helpers (`helpers.js`)**
+
+   - `isValidAddress(address)`: Verifica si una dirección es válida.
+   - `formatEther(amount)`: Convierte una cantidad a formato de Ether.
+   - `parseEther(amount)`: Convierte una cantidad de Ether a Wei.
+
+3. **Validation (`validation.js`)**
+
+   - `validateUserRegistration(data)`: Valida los datos para el registro de usuario.
+   - `validateUserLogin(data)`: Valida los datos para el inicio de sesión.
+   - `validateTransaction(data)`: Valida los datos de una transacción.
+
+## Middlewares
+
+1. **Auth Middleware (`authMiddleware.js`)**
+
+   - `authenticateUser(req, res, next)`: Verifica si el usuario está autenticado utilizando un token JWT.
+
+2. **Error Handler Middleware (`errorHandler.js`)**
+
+   - `errorHandler(err, req, res, next)`: Maneja los errores globales de la aplicación.
+
+## Pruebas con Postman
+
+Para realizar pruebas de la API utilizando Postman, puedes seguir las siguientes instrucciones para cada endpoint.
+
+### 1. Registro de Usuario
+
+- **Endpoint**: `POST /api/users/register`
+- **URL**: `http://localhost:5000/api/users/register`
+- **Headers**: `Content-Type: application/json`
+- **Body** (JSON):
+  ```json
+  {
+    "username": "testuser",
+    "email": "testuser@example.com",
+    "password": "password123"
+  }
+  ```
+
+### 2. Inicio de Sesión
+
+- **Endpoint**: `POST /api/users/login`
+- **URL**: `http://localhost:5000/api/users/login`
+- **Headers**: `Content-Type: application/json`
+- **Body** (JSON):
+  ```json
+  {
+    "email": "testuser@example.com",
+    "password": "password123"
+  }
+  ```
+
+### 3. Obtener el Perfil del Usuario
+
+- **Endpoint**: `GET /api/users/profile`
+- **URL**: `http://localhost:5000/api/users/profile`
+- **Headers**:
+  - `Content-Type: application/json`
+  - `Authorization`: `Bearer <token>` (El token se obtiene del inicio de sesión)
+
+### 4. Crear una Wallet
+
+- **Endpoint**: `POST /api/wallets/create`
+- **URL**: `http://localhost:5000/api/wallets/create`
+- **Headers**:
+  - `Content-Type: application/json`
+  - `Authorization`: `Bearer <token>`
+
+5. Obtener la Wallet del Usuario
+
+Endpoint: GET /api/wallets/:userId
+
+URL: http://localhost:5000/api/wallets/1 (reemplazar 1 con el userId correspondiente)
+
+Headers:
+
+Content-Type: application/json
+
+Authorization: Bearer <token>
+
+6. Obtener el Saldo de la Wallet
+
+Endpoint: GET /api/wallets/balance/:userId
+
+URL: http://localhost:5000/api/wallets/balance/1 (reemplazar 1 con el userId correspondiente)
+
+Headers:
+
+Content-Type: application/json
+
+Authorization: Bearer <token>
+
+7. Crear una Transacción
+
+Endpoint: POST /api/transactions/create
+
+URL: http://localhost:5000/api/transactions/create
+
+Headers:
+
+Content-Type: application/json
+
+Authorization: Bearer <token>
+
+Body (JSON):
+
+{
+  "user_id": 1,
+  "to_address": "0xRecipientAddress",
+  "amount": 0.1,
+  "token_address": "0xTokenContractAddress"
+}
+
+8. Obtener las Transacciones del Usuario
+
+Endpoint: GET /api/transactions/user/:userId
+
+URL: http://localhost:5000/api/transactions/user/1 (reemplazar 1 con el userId correspondiente)
+
+Headers:
+
+Content-Type: application/json
+
+Authorization: Bearer <token>
+
+9. Obtener el Estado de una Transacción
+
+Endpoint: GET /api/transactions/status/:hash
+
+URL: http://localhost:5000/api/transactions/status/<hash> (reemplazar <hash> con el hash de la transacción)
+
+Headers:
+
+Content-Type: application/json
+
+Authorization: Bearer <token>
+
+Notas Finales
+
+Este proyecto tiene como objetivo proporcionar una solución para la gestión de wallets automáticas en una plataforma tipo exchange. Asegúrate de configurar adecuadamente las variables de entorno y de seguir las buenas prácticas de seguridad, especialmente en lo que respecta a la protección de claves privadas y datos sensibles. Además, se recomienda realizar pruebas exhaustivas en un entorno de desarrollo antes de implementar la aplicación en producción.
+
