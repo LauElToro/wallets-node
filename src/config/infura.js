@@ -1,7 +1,13 @@
-const { ethers } = require('ethers');
+const { ethers } = require("ethers");
+const networks = require("../models/networks");
 require('dotenv').config();
+// Leer la red seleccionada desde `.env`
+const selectedNetwork = process.env.NETWORK || "mainnet";
 
-// Crear un proveedor utilizando Infura
-const provider = new ethers.JsonRpcProvider(`https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`);
+// Configurar el proveedor de Infura según la red seleccionada
+const provider = new ethers.providers.InfuraProvider(
+  networks.networks[selectedNetwork].infura, // homestead o sepolia
+  process.env.INFURA_API_KEY
+);
 
 module.exports = provider;

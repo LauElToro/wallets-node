@@ -52,3 +52,18 @@ exports.getWalletBalance = async (walletAddress) => {
     throw new Error('No se pudo obtener el saldo de la wallet');
   }
 };
+
+exports.updateWalletBalances = async () => {
+  const wallets = await Wallet.findAll();
+
+  for (const wallet of wallets) {
+    try {
+      const balance = await provider.getBalance(wallet.address);
+      wallet.balance = ethers.utils.formatEther(balance);
+      await wallet.save();
+      console.log(`Saldo actualizado para ${wallet.address}: ${wallet.balance}`);
+    } catch (error) {
+      console.error(`Error actualizando saldo para ${wallet.address}:`, error);
+    }
+  }
+};

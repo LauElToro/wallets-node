@@ -1,10 +1,15 @@
 const express = require('express');
 const { authenticateUser } = require('../middlewares/authMiddleware');
-const transactionController = require('../controllers/transactionController');
+const { verifyTransactionStatus, transactionController, transferToken }  = require('../controllers/transactionController');
 
 const router = express.Router();
 
 // Rutas relacionadas a transacciones
+// Transferir tokens
+router.post("/transferToken", transferToken);
+
+// Verificar el estado de la transaccion 
+router.get("/status/:hash", verifyTransactionStatus);
 
 // Crear una nueva transacción
 router.post('/create', authenticateUser, transactionController.createTransaction);
